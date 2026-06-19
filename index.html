@@ -63,9 +63,20 @@
   .upload .s{font-size:11.5px;color:var(--sub);margin-top:3px}
   .calc{font-size:12px;border-top:1px solid var(--line);margin-top:6px}
   .calc table{width:100%;border-collapse:collapse}
-  .calc td{padding:6px 18px;border-bottom:1px solid #f0f0f0}
-  .calc td:first-child{color:var(--sub)}
-  .calc td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+  .calc td{padding:5px 14px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+  .calc td:first-child{color:var(--sub);width:60%;font-size:11.5px}
+  .calc td:last-child{text-align:right}
+  .calc-input{
+    width:100%;border:1px solid transparent;border-radius:6px;padding:3px 7px;
+    font-size:13px;font-weight:600;font-family:var(--sans);font-variant-numeric:tabular-nums;
+    text-align:right;background:transparent;color:var(--ink);transition:.12s;
+    -moz-appearance:textfield;
+  }
+  .calc-input::-webkit-outer-spin-button,.calc-input::-webkit-inner-spin-button{-webkit-appearance:none}
+  .calc-input:hover{border-color:var(--line2);background:#f9f9f9}
+  .calc-input:focus{outline:none;border-color:var(--accent);background:#fff;box-shadow:0 0 0 2px var(--accent-soft)}
+  .calc-input.manual{color:var(--accent);border-color:#f5c0c5;background:#fff9f9}
+  .calc-input[readonly]{color:var(--sub);cursor:default;pointer-events:none}
   /* stage */
   .stage-wrap{position:relative;display:flex;flex-direction:column}
   .stage-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--line);gap:10px;flex-wrap:wrap}
@@ -162,17 +173,19 @@
       </div>
 
       <div class="panel">
-        <h2>③ 自動計算結果</h2>
+        <h2>③ 計算結果（クリックで手動変更可）</h2>
         <div class="calc"><table><tbody>
-          <tr><td>BW（=FW+20）</td><td id="o_bw">—</td></tr>
-          <tr><td>SH（=FH）</td><td id="o_sh">—</td></tr>
-          <tr><td>BH</td><td id="o_bh">—</td></tr>
-          <tr><td>BD（固定）</td><td id="o_bd">170</td></tr>
-          <tr><td>ヘッドボックス数</td><td id="o_hb">—</td></tr>
-          <tr><td>本体取付ブラケット</td><td id="o_tb">—</td></tr>
-          <tr><td>ガイドレールBK（ビス計算用）</td><td id="o_gb">—</td></tr>
-          <tr><td>本体取付用ビス</td><td id="o_screw">—</td></tr>
+          <tr><td>FW（入力値）</td><td><input class="calc-input" id="o_fw" type="number" readonly tabindex="-1"></td></tr>
+          <tr><td>FH（入力値）</td><td><input class="calc-input" id="o_fh" type="number" readonly tabindex="-1"></td></tr>
+          <tr><td>BW（=FW+20）</td><td><input class="calc-input" id="o_bw" type="number" placeholder="—"></td></tr>
+          <tr><td>BH</td><td><input class="calc-input" id="o_bh" type="number" placeholder="—"></td></tr>
+          <tr><td>BD（固定）</td><td><input class="calc-input" id="o_bd" type="number" value="170"></td></tr>
+          <tr><td>ヘッドボックス数</td><td><input class="calc-input" id="o_hb" type="number" placeholder="—"></td></tr>
+          <tr><td>本体取付ブラケット</td><td><input class="calc-input" id="o_tb" type="number" placeholder="—"></td></tr>
+          <tr><td>ガイドレールBK（ビス計算用）</td><td><input class="calc-input" id="o_gb" type="number" readonly tabindex="-1"></td></tr>
+          <tr><td>本体取付用ビス</td><td><input class="calc-input" id="o_screw" type="number" placeholder="—"></td></tr>
         </tbody></table></div>
+        <div style="padding:6px 14px 10px;font-size:11px;color:var(--sub)">赤字の値は手動変更可。FW/FH変更で全リセット。</div>
       </div>
 
       <div class="btn-row">
@@ -320,28 +333,90 @@ COLORS.forEach(c=>{
 });
 
 /* ---------- inputs ---------- */
-['fw','fh','qty','kaisha'].forEach(id=>document.getElementById(id).addEventListener('input',recompute));
+// FW/FH changes → full reset of all overrides
+['fw','fh'].forEach(id=>document.getElementById(id).addEventListener('input',()=>{
+  clearOverrides(); recompute();
+}));
+// qty/kaisha → only update those values, keep overrides
+['qty','kaisha'].forEach(id=>document.getElementById(id).addEventListener('input',recompute));
 
-function set(id,v){document.getElementById(id).textContent=(v||v===0)&&v!==''?v:'—';}
+/* ---------- calc-input overrides ---------- */
+// Keys that are manually editable (shown as inputs in the calc panel)
+const OVERRIDE_KEYS=['bw','bh','bd','hb','tb','screw'];
+const overrides={}; // key -> user-typed value (string) or undefined
+
+function clearOverrides(){OVERRIDE_KEYS.forEach(k=>delete overrides[k]);}
+
+// Wire calc-inputs: on user edit, store override and update preview
+OVERRIDE_KEYS.forEach(key=>{
+  const el=document.getElementById('o_'+key);
+  if(!el)return;
+  el.addEventListener('input',()=>{
+    const v=el.value.trim();
+    if(v===''){delete overrides[key];}else{overrides[key]=v;}
+    el.classList.toggle('manual', v!=='' && key in overrides);
+    applyValuesFromInputs();
+  });
+  el.addEventListener('focus',()=>el.select&&el.select());
+});
+
+function getCalcVal(key,auto){
+  // returns override if set, else auto value
+  return (key in overrides)? overrides[key] : auto;
+}
+
+function setCalcInput(id,v,isOverridden){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const display=(v||v===0)&&v!==''?String(v):'';
+  if(document.activeElement!==el) el.value=display;
+  el.classList.toggle('manual',isOverridden&&display!=='');
+}
+
+function applyValuesFromInputs(){
+  // Read current calc-input values (may be overrides or auto) into values{}
+  const fw=parseInt(document.getElementById('fw').value)||0;
+  const fh=parseInt(document.getElementById('fh').value)||0;
+  const qty=parseInt(document.getElementById('qty').value)||0;
+  const kaisha=document.getElementById('kaisha').value.trim();
+  const bw  =parseInt(document.getElementById('o_bw').value)||'';
+  const bh  =parseInt(document.getElementById('o_bh').value)||'';
+  const bd  =parseInt(document.getElementById('o_bd').value)||170;
+  const hb  =parseInt(document.getElementById('o_hb').value)||'';
+  const tb  =parseInt(document.getElementById('o_tb').value)||'';
+  const screw=parseInt(document.getElementById('o_screw').value)||'';
+  values={
+    fw:fw||'', fh:fh||'', bw, bh, bd,
+    qty:qty||'', tb, screw, tb2:tb, hb,
+    kaisha:kaisha||'', color:'■',
+  };
+  paintFields();
+}
 
 function recompute(){
   const fw=parseInt(document.getElementById('fw').value)||0;
   const fh=parseInt(document.getElementById('fh').value)||0;
   const qty=parseInt(document.getElementById('qty').value)||0;
   const kaisha=document.getElementById('kaisha').value.trim();
-  const bw=fw?fw+20:0, sh=fh, bh=fh?calcBH(sh):0;
-  const tb=fw?calcBodyBracket(fw):0;
-  const gb=fh?calcRailBracket(fh):0;
-  const screw=(fw&&fh)?(tb*3+gb*2):0;
-  const hb=fw?(fw<=4000?1:2):0;
-  set('o_bw',bw);set('o_sh',sh);set('o_bh',bh);
-  set('o_tb',tb);set('o_gb',gb);set('o_screw',screw);set('o_hb',hb);
-  values={
-    fw:fw||'', fh:fh||'', bw:bw||'', bh:bh||'', bd:170,
-    qty:qty||'', tb:tb||'', screw:screw||'', tb2:tb||'', hb:hb||'',
-    kaisha:kaisha||'', color:'■',
-  };
-  paintFields();
+  const bw_auto =fw?fw+20:0;
+  const sh=fh, bh_auto=fh?calcBH(sh):0;
+  const tb_auto =fw?calcBodyBracket(fw):0;
+  const gb_auto =fh?calcRailBracket(fh):0;
+  const screw_auto=(fw&&fh)?(tb_auto*3+gb_auto*2):0;
+  const hb_auto =fw?(fw<=4000?1:2):0;
+
+  // Update read-only display inputs (FW/FH/GB shown as info, not editable)
+  const o_fw=document.getElementById('o_fw'); if(o_fw)o_fw.value=fw||'';
+  const o_fh=document.getElementById('o_fh'); if(o_fh)o_fh.value=fh||'';
+  const o_gb=document.getElementById('o_gb'); if(o_gb)o_gb.value=gb_auto||'';
+
+  // Set editable inputs (only if not overridden, and not focused)
+  const autos={bw:bw_auto,bh:bh_auto,bd:170,hb:hb_auto,tb:tb_auto,screw:screw_auto};
+  OVERRIDE_KEYS.forEach(key=>{
+    setCalcInput('o_'+key, getCalcVal(key,autos[key]||''), key in overrides);
+  });
+
+  applyValuesFromInputs();
   document.getElementById('export').disabled=!(pdfDoc&&fw&&fh);
 }
 
