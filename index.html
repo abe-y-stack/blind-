@@ -9,8 +9,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fontkit/1.8.0/fontkit.umd.min.js"></script>
 <style>
   :root{
-    --ink:#1a1a1a; --sub:#6b6b6b; --line:#e4e4e4; --line2:#d0d0d0;
-    --bg:#fafafa; --panel:#ffffff; --accent:#d0021b; --accent-soft:#fdeaec;
+    --ink:#1a1a1a;--sub:#6b6b6b;--line:#e4e4e4;--line2:#d0d0d0;
+    --bg:#fafafa;--panel:#ffffff;--accent:#d0021b;--accent-soft:#fdeaec;
     --shadow:0 1px 3px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04);
     --radius:14px;
     --sans:-apple-system,BlinkMacSystemFont,"Helvetica Neue","Segoe UI","Hiragino Kaku Gothic ProN","Hiragino Sans",Meiryo,sans-serif;
@@ -66,15 +66,36 @@
   .calc td{padding:6px 18px;border-bottom:1px solid #f0f0f0}
   .calc td:first-child{color:var(--sub)}
   .calc td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
-  .stage-wrap{position:relative}
-  .stage-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--line);gap:12px;flex-wrap:wrap}
-  .stage-bar .hint{font-size:11.5px;color:var(--sub)}
+  /* stage */
+  .stage-wrap{position:relative;display:flex;flex-direction:column}
+  .stage-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--line);gap:10px;flex-wrap:wrap}
+  .stage-bar .hint{font-size:11px;color:var(--sub)}
+  /* page tabs */
+  .pagetabs{display:flex;gap:6px;align-items:center}
+  .pagetabs button{
+    border:1px solid var(--line2);background:#fff;border-radius:8px;padding:5px 14px;
+    font-size:12px;font-family:var(--sans);cursor:pointer;color:var(--sub);transition:.12s;font-weight:500
+  }
+  .pagetabs button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .pagetabs button.edit-pg{border-color:var(--accent);color:var(--accent)}
+  .pagetabs button.edit-pg.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .pg-badge{font-size:10px;color:var(--sub);white-space:nowrap}
   .zoomctl{display:flex;align-items:center;gap:6px}
   .zoomctl button{width:28px;height:28px;border:1px solid var(--line2);background:#fff;border-radius:7px;cursor:pointer;font-size:15px;line-height:1;color:var(--ink)}
   .zoomctl span{font-size:12px;color:var(--sub);min-width:42px;text-align:center}
-  .stage-scroll{overflow:auto;max-height:78vh;background:#f0f0f0;border-radius:0 0 var(--radius) var(--radius)}
-  #stage{position:relative;margin:18px auto;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.12);transform-origin:top left}
+  .stage-scroll{overflow:auto;max-height:76vh;background:#f0f0f0;border-radius:0 0 var(--radius) var(--radius);flex:1}
+  #stage{position:relative;margin:16px auto;background:#fff;box-shadow:0 2px 14px rgba(0,0,0,.12);transform-origin:top left}
   #pdfCanvas{display:block}
+  /* readonly overlay for pages 1-2 */
+  #readonlyOverlay{
+    position:absolute;inset:0;z-index:10;cursor:not-allowed;
+    background:rgba(250,250,250,.18);
+  }
+  .readonly-badge{
+    position:absolute;top:12px;left:50%;transform:translateX(-50%);
+    background:rgba(0,0,0,.55);color:#fff;font-size:11px;padding:4px 12px;border-radius:999px;
+    white-space:nowrap;pointer-events:none;z-index:11
+  }
   .field{
     position:absolute;color:var(--accent);font-weight:700;cursor:grab;white-space:nowrap;user-select:none;
     transform:translate(-50%,-50%);padding:1px 2px;border-radius:3px;line-height:1;font-family:Arial,sans-serif
@@ -93,8 +114,7 @@
   .selbar label{color:var(--sub)}
   .selbar input[type=range]{width:120px}
   .selbar .val{font-variant-numeric:tabular-nums;min-width:34px;text-align:right;color:var(--ink)}
-  .note{font-size:11px;color:var(--sub);padding:0 18px 16px;line-height:1.6}
-  .kbd{display:inline-block;border:1px solid var(--line2);border-bottom-width:2px;border-radius:4px;padding:0 5px;font-size:10.5px;background:#fafafa;font-family:var(--sans)}
+  .note{font-size:11px;color:var(--sub);padding:0 18px 14px;line-height:1.6}
   footer{margin-top:20px;font-size:11px;color:var(--sub);text-align:center}
 </style>
 </head>
@@ -104,10 +124,10 @@
     <h1>承認図自動作成ツール</h1>
     <span class="tag">passiv blind PB-R80E</span>
   </header>
-  <p class="lead">FW・FH を入力するだけで必要寸法を自動計算し、承認図PDFに赤文字で記入します。位置はドラッグで微調整できます。</p>
+  <p class="lead">FW・FH を入力するだけで必要寸法を自動計算し、3ページ目に赤文字で記入。全ページ結合したPDFを出力します。</p>
 
   <div class="grid">
-    <!-- ============ LEFT : INPUT ============ -->
+    <!-- ===== LEFT ===== -->
     <div style="display:flex;flex-direction:column;gap:20px">
       <div class="panel">
         <h2>① 承認図PDFを読み込み</h2>
@@ -115,7 +135,7 @@
           <div class="upload" id="drop">
             <div class="ic">⬆︎</div>
             <div class="t" id="dropT">PDFを選択 / ドロップ</div>
-            <div class="s" id="dropS">テンプレートの承認図（1ページ目）を使用します</div>
+            <div class="s" id="dropS">3枚構成PDF対応 ・ 3ページ目に記入して全ページ出力</div>
           </div>
           <input type="file" id="file" accept="application/pdf" hidden>
         </div>
@@ -143,7 +163,7 @@
 
       <div class="panel">
         <h2>③ 自動計算結果</h2>
-        <div class="calc"><table id="calcTbl"><tbody>
+        <div class="calc"><table><tbody>
           <tr><td>BW（=FW+20）</td><td id="o_bw">—</td></tr>
           <tr><td>SH（=FH）</td><td id="o_sh">—</td></tr>
           <tr><td>BH</td><td id="o_bh">—</td></tr>
@@ -159,48 +179,58 @@
         <button class="btn ghost" id="resetPos">位置リセット</button>
         <button class="btn ghost" id="savePos" data-label="この位置を保存">この位置を保存</button>
       </div>
-      <button class="btn primary" id="export" disabled style="margin-top:2px">PDFを出力</button>
+      <button class="btn primary" id="export" disabled style="margin-top:2px">全ページPDFを出力</button>
     </div>
 
-    <!-- ============ RIGHT : STAGE ============ -->
+    <!-- ===== RIGHT : STAGE ===== -->
     <div class="panel stage-wrap">
       <div class="stage-bar">
-        <span class="hint">赤文字をドラッグして位置を調整 ・ クリックで文字サイズ変更</span>
+        <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div class="pagetabs" id="pagetabs"></div>
+            <span class="pg-badge" id="pgBadge"></span>
+          </div>
+          <span class="hint" id="stageHint">赤文字をドラッグして位置を調整 ・ クリックで文字サイズ変更（3ページ目のみ編集可）</span>
+        </div>
         <div class="zoomctl">
           <button id="zoomOut">−</button><span id="zoomLbl">100%</span><button id="zoomIn">+</button>
         </div>
       </div>
+
       <div class="stage-scroll" id="scroll">
         <div class="empty" id="empty">
           <div class="big">📄</div>
           <div class="t">承認図PDFを読み込んでください</div>
-          <div class="s">左の①からPDFを選択すると、ここにプレビューが表示され、赤文字が自動配置されます。</div>
+          <div class="s">3枚構成のPDFを選択すると、ページ切替プレビューが表示され、3ページ目に赤文字が自動配置されます。</div>
         </div>
         <div id="stage" style="display:none">
           <canvas id="pdfCanvas"></canvas>
+          <div id="readonlyOverlay" style="display:none"></div>
+          <div class="readonly-badge" id="readonlyBadge" style="display:none">閲覧のみ（編集は3ページ目）</div>
         </div>
       </div>
+
       <div class="selbar" id="selbar">
         <span>選択中: <span class="nm" id="selName">—</span></span>
         <div class="ctl"><label>文字サイズ</label>
           <input type="range" id="selSize" min="6" max="40" step="1">
           <span class="val" id="selSizeVal">—</span></div>
-        <span class="hint">矢印キーで微調整 / <span class="kbd">Shift</span>+矢印で大きく</span>
+        <span style="font-size:11px;color:var(--sub)">矢印キーで微調整 / Shift+矢印で大きく</span>
       </div>
       <div class="note">
-        記入箇所：FW・FH・BW・BH・BD（メイン寸法表）／ヘッドボックス数／本体取付ブラケット数／本体取付用ビス数／Order Quantity／物件名（左下）／カラー選択（■）。<br>
-        どのPDFも入力位置は同じ前提です。一度ドラッグで位置を合わせたら<b>「この位置を保存」</b>を押すと、次回以降・別PDFでも同じ配置が自動で復元されます（このHTMLをダウンロードしてブラウザで開いた場合に保存されます）。
+        1・2ページ目は閲覧のみ。3ページ目で赤文字をドラッグして位置を合わせ、<b>「この位置を保存」</b>を押すと次回以降も同じ配置で復元されます。出力PDFは全ページ結合されます。
       </div>
     </div>
   </div>
-
   <footer>株式会社あおぞらホーム ／ OK-DEPOT passiv blind ・ 承認図自動作成ツール</footer>
 </div>
 
 <script>
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-/* ---------- color options ---------- */
+/* ---------- constants ---------- */
+const EDIT_PAGE=3; // 赤字を記入するページ番号（1始まり）
+
 const COLORS=[
   {code:'YO01',name:'Silver',hex:'#c8c8c8'},
   {code:'YO02',name:'White',hex:'#ffffff'},
@@ -209,35 +239,21 @@ const COLORS=[
 ];
 let selectedColor='YO03';
 
-/* ---------- BH table by SH ---------- */
+/* ---------- calculation tables ---------- */
 function calcBH(sh){
-  if(sh<=1500)return 230;
-  if(sh<=2000)return 265;
-  if(sh<=2500)return 300;
-  if(sh<=3000)return 335;
-  if(sh<=3500)return 370;
-  if(sh<=4000)return 405;
-  return 475; // 4001-5000
+  if(sh<=1500)return 230; if(sh<=2000)return 265; if(sh<=2500)return 300;
+  if(sh<=3000)return 335; if(sh<=3500)return 370; if(sh<=4000)return 405;
+  return 475;
 }
-/* 本体取付ブラケット by FW */
 function calcBodyBracket(fw){
-  if(fw<=1500)return 2;
-  if(fw<=2800)return 3;
-  if(fw<=3800)return 4;
-  return 5; // 3801-4000
+  if(fw<=1500)return 2; if(fw<=2800)return 3; if(fw<=3800)return 4; return 5;
 }
-/* ガイドレールブラケット by FH (per rail) */
 function calcRailBracket(fh){
-  if(fh<=1800)return 2;
-  if(fh<=3000)return 3;
-  if(fh<=4000)return 4;
-  if(fh<=5200)return 5;
-  return 6; // 5201-6300
+  if(fh<=1800)return 2; if(fh<=3000)return 3; if(fh<=4000)return 4;
+  if(fh<=5200)return 5; return 6;
 }
 
-/* ---------- field definitions ----------
-   x,y are FRACTIONS (0..1) of the rendered page, so they survive zoom & DPI.
-   Defaults are tuned to the sample drawing layout (landscape A-ish).        */
+/* ---------- field definitions ---------- */
 const FIELD_DEFS=[
   {key:'fw',     label:'FW',         x:0.470, y:0.792, size:13},
   {key:'fh',     label:'FH',         x:0.520, y:0.792, size:13},
@@ -253,90 +269,81 @@ const FIELD_DEFS=[
   {key:'color',  label:'カラー■',     x:0.470, y:0.762, size:13},
 ];
 
-/* ---------- position persistence ---------- */
+/* ---------- localStorage ---------- */
 const LS_KEY='shoninzu_positions_v2';
 function loadSavedPositions(){
-  try{
-    const raw=localStorage.getItem(LS_KEY);
-    if(raw){const obj=JSON.parse(raw);if(obj&&typeof obj==='object')return obj;}
-  }catch(e){console.warn('load positions failed',e);}
+  try{const r=localStorage.getItem(LS_KEY);if(r){const o=JSON.parse(r);if(o&&typeof o==='object')return o;}}catch(e){}
   return null;
 }
 function savePositions(){
   try{
     localStorage.setItem(LS_KEY,JSON.stringify(positions));
-    flashSaved();
-  }catch(e){alert('位置の保存に失敗しました。ダウンロードしたHTMLをローカルで開いてご利用ください。');}
-}
-function flashSaved(){
-  const b=document.getElementById('savePos');
-  if(!b)return;const t=b.dataset.label;b.textContent='✓ 保存しました';b.disabled=true;
-  setTimeout(()=>{b.textContent=t;b.disabled=false;},1400);
+    const b=document.getElementById('savePos');
+    const t=b.dataset.label; b.textContent='✓ 保存しました'; b.disabled=true;
+    setTimeout(()=>{b.textContent=t;b.disabled=false;},1400);
+  }catch(e){alert('保存に失敗しました。ダウンロードしたHTMLをローカルで開いてください。');}
 }
 function initPositions(){
   const saved=loadSavedPositions();
   FIELD_DEFS.forEach(d=>{
-    if(saved&&saved[d.key]){
-      positions[d.key]={x:saved[d.key].x??d.x,y:saved[d.key].y??d.y,size:saved[d.key].size??d.size};
-    }else{
-      positions[d.key]={x:d.x,y:d.y,size:d.size};
-    }
+    positions[d.key]=saved&&saved[d.key]
+      ?{x:saved[d.key].x??d.x, y:saved[d.key].y??d.y, size:saved[d.key].size??d.size}
+      :{x:d.x, y:d.y, size:d.size};
   });
 }
 
 /* ---------- state ---------- */
-let pdfDoc=null, pdfBytes=null, page=null, viewport=null;
-let renderScale=1.5;       // base render resolution
-let zoom=1;                // display zoom
-let pageW=0, pageH=0;      // CSS px of rendered page at renderScale
-const fieldEls={};         // key -> {el, def}
-let positions={};          // key -> {x,y,size} fractions+size
-let values={};             // key -> string to print
+let pdfDoc=null, pdfBytes=null;
+let totalPages=0, currentPage=1;
+let pageCache={};        // pageNum -> {page, viewport, pageW, pageH}
+let renderScale=1.5;
+let zoom=1;
+let pageW=0, pageH=0;   // visual dims of currently shown page
+const fieldEls={};
+let positions={};
+let values={};
 let selectedKey=null;
 
-/* ---------- build color buttons ---------- */
+/* ---------- color buttons ---------- */
 const colorsBox=document.getElementById('colors');
 COLORS.forEach(c=>{
   const b=document.createElement('button');
   b.dataset.code=c.code;
   b.innerHTML=`<span class="sw" style="background:${c.hex}"></span>${c.code} ${c.name}`;
   if(c.code===selectedColor)b.classList.add('on');
-  b.onclick=()=>{selectedColor=c.code;[...colorsBox.children].forEach(x=>x.classList.toggle('on',x.dataset.code===c.code));recompute();};
+  b.onclick=()=>{
+    selectedColor=c.code;
+    [...colorsBox.children].forEach(x=>x.classList.toggle('on',x.dataset.code===c.code));
+    recompute();
+  };
   colorsBox.appendChild(b);
 });
 
 /* ---------- inputs ---------- */
 ['fw','fh','qty','kaisha'].forEach(id=>document.getElementById(id).addEventListener('input',recompute));
 
+function set(id,v){document.getElementById(id).textContent=(v||v===0)&&v!==''?v:'—';}
+
 function recompute(){
   const fw=parseInt(document.getElementById('fw').value)||0;
   const fh=parseInt(document.getElementById('fh').value)||0;
   const qty=parseInt(document.getElementById('qty').value)||0;
   const kaisha=document.getElementById('kaisha').value.trim();
-
-  const bw=fw?fw+20:0;
-  const sh=fh;
-  const bh=fh?calcBH(sh):0;
+  const bw=fw?fw+20:0, sh=fh, bh=fh?calcBH(sh):0;
   const tb=fw?calcBodyBracket(fw):0;
-  const gb=fh?calcRailBracket(fh):0;          // 内部値（ビス計算用）
-  const screw=(fw&&fh)?(tb*3+gb*2):0;         // 本体×3 + ガイド左右2本×1
-  const hb=fw?(fw<=4000?1:2):0;               // ヘッドボックス数
-
-  // result panel
+  const gb=fh?calcRailBracket(fh):0;
+  const screw=(fw&&fh)?(tb*3+gb*2):0;
+  const hb=fw?(fw<=4000?1:2):0;
   set('o_bw',bw);set('o_sh',sh);set('o_bh',bh);
   set('o_tb',tb);set('o_gb',gb);set('o_screw',screw);set('o_hb',hb);
-
-  const col=COLORS.find(c=>c.code===selectedColor);
   values={
     fw:fw||'', fh:fh||'', bw:bw||'', bh:bh||'', bd:170,
-    qty:qty||'', tb:tb||'', screw:screw||'',
-    tb2:tb||'', hb:hb||'',
+    qty:qty||'', tb:tb||'', screw:screw||'', tb2:tb||'', hb:hb||'',
     kaisha:kaisha||'', color:'■',
   };
   paintFields();
   document.getElementById('export').disabled=!(pdfDoc&&fw&&fh);
 }
-function set(id,v){document.getElementById(id).textContent=(v||v===0)&&v!==''?v:'—';}
 
 /* ---------- PDF load ---------- */
 const fileInput=document.getElementById('file');
@@ -348,46 +355,93 @@ fileInput.onchange=e=>{if(e.target.files[0])loadPDF(e.target.files[0]);};
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files[0];if(f&&f.type==='application/pdf')loadPDF(f);});
 
 async function loadPDF(file){
+  pageCache={};
   const buf=await file.arrayBuffer();
   pdfBytes=new Uint8Array(buf.slice(0));
   pdfDoc=await pdfjsLib.getDocument({data:buf.slice(0)}).promise;
-  page=await pdfDoc.getPage(1);
+  totalPages=pdfDoc.numPages;
   document.getElementById('dropT').textContent=file.name;
-  document.getElementById('dropS').textContent='読み込み完了 ・ 別ファイルに変更も可能';
+  document.getElementById('dropS').textContent=`${totalPages}ページ構成 ・ ${EDIT_PAGE}ページ目に記入して出力`;
   drop.classList.add('has');
-  // restore saved positions (or defaults) only once
-  if(Object.keys(positions).length===0){
-    initPositions();
-  }
-  await renderPage();
+  if(Object.keys(positions).length===0) initPositions();
+  buildPageTabs();
+  // jump straight to the edit page
+  currentPage=Math.min(EDIT_PAGE, totalPages);
+  await switchPage(currentPage);
   document.getElementById('empty').style.display='none';
   document.getElementById('stage').style.display='block';
   buildFieldEls();
   recompute();
 }
 
-async function renderPage(){
-  viewport=page.getViewport({scale:renderScale});
+/* ---------- page tabs ---------- */
+function buildPageTabs(){
+  const tabs=document.getElementById('pagetabs');
+  tabs.innerHTML='';
+  for(let i=1;i<=totalPages;i++){
+    const b=document.createElement('button');
+    b.textContent=`${i}ページ`;
+    b.dataset.pg=i;
+    if(i===EDIT_PAGE)b.classList.add('edit-pg');
+    b.onclick=()=>switchPage(i);
+    tabs.appendChild(b);
+  }
+  updateTabActive();
+}
+
+function updateTabActive(){
+  [...document.getElementById('pagetabs').children].forEach(b=>{
+    b.classList.toggle('active',parseInt(b.dataset.pg)===currentPage);
+  });
+  const isEdit=(currentPage===EDIT_PAGE);
+  document.getElementById('pgBadge').textContent=isEdit?'← 編集ページ':'（閲覧のみ）';
+  document.getElementById('readonlyOverlay').style.display=isEdit?'none':'block';
+  document.getElementById('readonlyBadge').style.display=isEdit?'none':'block';
+  // show field overlays only on edit page
+  Object.values(fieldEls).forEach(o=>{
+    o.el.style.visibility=isEdit?'visible':'hidden';
+  });
+  if(!isEdit&&selectedKey){
+    selectedKey=null;
+    document.getElementById('selbar').classList.remove('show');
+    Object.values(fieldEls).forEach(o=>o.el.classList.remove('sel'));
+  }
+}
+
+async function switchPage(n){
+  if(n<1||n>totalPages)return;
+  currentPage=n;
+  await renderPage(n);
+  updateTabActive();
+  paintFields();
+}
+
+/* ---------- render ---------- */
+async function renderPage(n){
+  let cached=pageCache[n];
+  if(!cached){
+    const page=await pdfDoc.getPage(n);
+    const vp=page.getViewport({scale:renderScale});
+    cached={page,viewport:vp,pageW:vp.width,pageH:vp.height};
+    pageCache[n]=cached;
+  }
+  const {page,viewport,pageW:pw,pageH:ph}=cached;
+  pageW=pw; pageH=ph;
   const canvas=document.getElementById('pdfCanvas');
   const ctx=canvas.getContext('2d');
   const dpr=window.devicePixelRatio||1;
-  canvas.width=viewport.width*dpr;
-  canvas.height=viewport.height*dpr;
-  pageW=viewport.width; pageH=viewport.height;
-  canvas.style.width=pageW+'px';
-  canvas.style.height=pageH+'px';
+  canvas.width=pw*dpr; canvas.height=ph*dpr;
+  canvas.style.width=pw+'px'; canvas.style.height=ph+'px';
   const stage=document.getElementById('stage');
-  stage.style.width=pageW+'px';
-  stage.style.height=pageH+'px';
+  stage.style.width=pw+'px'; stage.style.height=ph+'px';
   ctx.setTransform(dpr,0,0,dpr,0,0);
   await page.render({canvasContext:ctx,viewport}).promise;
   applyZoom();
 }
 
-/* ---------- field DOM ---------- */
+/* ---------- field overlay ---------- */
 function buildFieldEls(){
   const stage=document.getElementById('stage');
-  // remove old
   Object.values(fieldEls).forEach(o=>o.el.remove());
   for(const k in fieldEls)delete fieldEls[k];
   FIELD_DEFS.forEach(def=>{
@@ -397,21 +451,27 @@ function buildFieldEls(){
     stage.appendChild(el);
     fieldEls[def.key]={el,def};
     makeDraggable(el,def.key);
-    el.addEventListener('click',ev=>{ev.stopPropagation();selectField(def.key);});
+    el.addEventListener('click',ev=>{
+      if(currentPage!==EDIT_PAGE)return;
+      ev.stopPropagation();selectField(def.key);
+    });
   });
   paintFields();
 }
 
 function paintFields(){
+  if(!pageW)return;
   FIELD_DEFS.forEach(def=>{
     const o=fieldEls[def.key]; if(!o)return;
-    const p=positions[def.key]||{x:def.x,y:def.y,size:def.size};
+    const p=positions[def.key]; if(!p)return;
     const v=values[def.key];
-    o.el.textContent=(v||v===0)?String(v):'';
-    o.el.style.display=(v||v===0)&&v!==''?'block':'none';
+    const show=(v||v===0)&&v!=='';
+    o.el.textContent=show?String(v):'';
+    o.el.style.display=show?'block':'none';
     o.el.style.left=(p.x*pageW)+'px';
     o.el.style.top=(p.y*pageH)+'px';
     o.el.style.fontSize=p.size+'px';
+    o.el.style.visibility=(currentPage===EDIT_PAGE)?'visible':'hidden';
   });
 }
 
@@ -419,6 +479,7 @@ function paintFields(){
 function makeDraggable(el,key){
   let sx,sy,ox,oy,drag=false;
   const down=e=>{
+    if(currentPage!==EDIT_PAGE)return;
     e.preventDefault();selectField(key);drag=true;el.classList.add('dragging');
     const pt=getPt(e); sx=pt.x; sy=pt.y;
     const p=positions[key]; ox=p.x; oy=p.y;
@@ -428,10 +489,8 @@ function makeDraggable(el,key){
   const move=e=>{
     if(!drag)return; e.preventDefault();
     const pt=getPt(e);
-    const dx=(pt.x-sx)/(pageW*zoom);
-    const dy=(pt.y-sy)/(pageH*zoom);
-    positions[key].x=Math.min(1,Math.max(0,ox+dx));
-    positions[key].y=Math.min(1,Math.max(0,oy+dy));
+    positions[key].x=Math.min(1,Math.max(0,ox+(pt.x-sx)/(pageW*zoom)));
+    positions[key].y=Math.min(1,Math.max(0,oy+(pt.y-sy)/(pageH*zoom)));
     paintFields();
   };
   const up=()=>{drag=false;el.classList.remove('dragging');
@@ -448,6 +507,7 @@ const selName=document.getElementById('selName');
 const selSize=document.getElementById('selSize');
 const selSizeVal=document.getElementById('selSizeVal');
 function selectField(key){
+  if(currentPage!==EDIT_PAGE)return;
   selectedKey=key;
   Object.values(fieldEls).forEach(o=>o.el.classList.toggle('sel',o.def.key===key));
   const def=FIELD_DEFS.find(d=>d.key===key);
@@ -467,10 +527,10 @@ document.getElementById('pdfCanvas').addEventListener('click',()=>{
   Object.values(fieldEls).forEach(o=>o.el.classList.remove('sel'));
 });
 window.addEventListener('keydown',e=>{
-  if(!selectedKey)return;
+  if(!selectedKey||currentPage!==EDIT_PAGE)return;
   if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){
     e.preventDefault();
-    const step=(e.shiftKey?5:1);
+    const step=e.shiftKey?5:1;
     const p=positions[selectedKey];
     if(e.key==='ArrowUp')p.y-=step/pageH;
     if(e.key==='ArrowDown')p.y+=step/pageH;
@@ -489,7 +549,7 @@ function applyZoom(){
 document.getElementById('zoomIn').onclick=()=>{zoom=Math.min(2.5,zoom+0.1);applyZoom();};
 document.getElementById('zoomOut').onclick=()=>{zoom=Math.max(0.4,zoom-0.1);applyZoom();};
 
-/* ---------- reset / save positions ---------- */
+/* ---------- reset / save ---------- */
 document.getElementById('resetPos').onclick=()=>{
   FIELD_DEFS.forEach(d=>positions[d.key]={x:d.x,y:d.y,size:d.size});
   paintFields();
@@ -497,7 +557,7 @@ document.getElementById('resetPos').onclick=()=>{
 };
 document.getElementById('savePos').onclick=savePositions;
 
-/* ---------- export PDF ---------- */
+/* ---------- font ---------- */
 const NOTO_URLS=[
   'https://raw.githubusercontent.com/notofonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Bold.otf',
   'https://raw.githubusercontent.com/googlefonts/noto-cjk/main/Sans/SubsetOTF/JP/NotoSansJP-Bold.otf',
@@ -506,22 +566,23 @@ let cachedFont=null;
 async function getJpFont(){
   if(cachedFont)return cachedFont;
   for(const url of NOTO_URLS){
-    try{
-      const r=await fetch(url);
-      if(r.ok){cachedFont=new Uint8Array(await r.arrayBuffer());return cachedFont;}
-    }catch(e){console.warn('font fetch failed:',url,e);}
+    try{const r=await fetch(url);if(r.ok){cachedFont=new Uint8Array(await r.arrayBuffer());return cachedFont;}}
+    catch(e){console.warn('font fetch:',url,e);}
   }
   return null;
 }
 
+/* ---------- export ---------- */
 document.getElementById('export').onclick=async()=>{
   const btn=document.getElementById('export');
-  btn.disabled=true;btn.textContent='生成中…';
+  btn.disabled=true; btn.textContent='生成中…';
   try{
-    const {PDFDocument,rgb,StandardFonts}=PDFLib;
+    const {PDFDocument,rgb,StandardFonts,degrees}=PDFLib;
+
+    // load the full PDF (all pages)
     const out=await PDFDocument.load(pdfBytes);
 
-    // resolve fontkit instance (UMD may expose as window.fontkit or default)
+    // embed JP font
     const fk=window.fontkit||(window.fontkit&&window.fontkit.default)||null;
     let font=null, usingJp=false;
     if(fk){
@@ -529,18 +590,23 @@ document.getElementById('export').onclick=async()=>{
         out.registerFontkit(fk);
         const jp=await getJpFont();
         if(jp){font=await out.embedFont(jp,{subset:true});usingJp=true;}
-      }catch(e){console.warn('JP font embed failed, fallback:',e);font=null;}
+      }catch(e){console.warn('JP font embed failed:',e);font=null;}
     }
-    if(!font){font=await out.embedFont(StandardFonts.HelveticaBold);usingJp=false;}
+    if(!font){font=await out.embedFont(StandardFonts.HelveticaBold);}
 
-    const pg=out.getPages()[0];
-    const rot=((pg.getRotation().angle%360)+360)%360; // 0/90/180/270
-    const {width:MW,height:MH}=pg.getSize();           // unrotated media box
-    // Visual page size (what pdf.js rendered / what the user sees & drags on)
+    // operate only on EDIT_PAGE (3rd page, index 2)
+    const editIdx=Math.min(EDIT_PAGE,out.getPageCount())-1;
+    const pg=out.getPages()[editIdx];
+    const rot=((pg.getRotation().angle%360)+360)%360;
+    const {width:MW,height:MH}=pg.getSize();
     const VW=(rot===90||rot===270)?MH:MW;
     const VH=(rot===90||rot===270)?MW:MH;
-    const red=rgb(0.816,0.008,0.106);
 
+    // use cached visual page size from render (same page)
+    const editCache=pageCache[EDIT_PAGE]||pageCache[Math.min(EDIT_PAGE,totalPages)];
+    const refH=editCache?editCache.pageH:pageH;
+
+    const red=rgb(0.816,0.008,0.106);
     FIELD_DEFS.forEach(def=>{
       let v=values[def.key];
       if(!(v||v===0)||v==='')return;
@@ -550,32 +616,16 @@ document.getElementById('export').onclick=async()=>{
         else if(/[^\x00-\x7F]/.test(txt))return;
       }
       const p=positions[def.key];
-      // size relative to VISUAL height
-      const ptSize=p.size*(VH/pageH);
+      const ptSize=p.size*(VH/refH);
       const tw=font.widthOfTextAtSize(txt,ptSize);
-      // center point in VISUAL coords (origin top-left, y down)
-      const vx=p.x*VW;
-      const vy=p.y*VH;
-      // baseline-centered text box in visual space
-      const bx=vx-tw/2;
-      const by=vy+ptSize*0.36; // visual y of baseline (down-positive)
-      // map visual (origin top-left) -> media (origin bottom-left) accounting for rotation,
-      // and supply the matching rotate so glyphs stay upright.
-      let X,Y,rotate;
-      const {degrees}=PDFLib;
-      if(rot===0){
-        X=bx; Y=VH-by; rotate=degrees(0);
-      }else if(rot===90){
-        // visual (vx right, vy down) -> media. media width=MW(=VH), height=MH(=VW)
-        X=by;            // along media x
-        Y=bx;            // along media y
-        rotate=degrees(90);
-      }else if(rot===180){
-        X=VW-bx; Y=by; rotate=degrees(180);
-      }else{ // 270
-        X=MW-by; Y=VW-bx; rotate=degrees(270);
-      }
-      pg.drawText(txt,{x:X,y:Y,size:ptSize,font,color:red,rotate});
+      const vx=p.x*VW, vy=p.y*VH;
+      const bx=vx-tw/2, by=vy+ptSize*0.36;
+      let X,Y,r;
+      if(rot===0)      {X=bx;       Y=VH-by;    r=0;}
+      else if(rot===90){X=by;       Y=bx;        r=90;}
+      else if(rot===180){X=VW-bx;   Y=by;        r=180;}
+      else              {X=MW-by;   Y=VW-bx;     r=270;}
+      pg.drawText(txt,{x:X,y:Y,size:ptSize,font,color:red,rotate:degrees(r)});
     });
 
     const bytes=await out.save();
@@ -585,14 +635,14 @@ document.getElementById('export').onclick=async()=>{
     const kaisha=document.getElementById('kaisha').value.trim();
     const fname=`承認図_PB-R80E_${kaisha?kaisha+'_':''}${fw}x${fh}.pdf`;
     const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);a.download=fname;a.click();
+    a.href=URL.createObjectURL(blob); a.download=fname; a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href),3000);
-    if(!usingJp)alert('日本語フォントの取得に失敗したため、物件名は出力されませんでした（数値・寸法は正常に出力されています）。ネット接続をご確認のうえ再出力してください。');
+    if(!usingJp)alert('日本語フォントの取得に失敗したため、物件名は出力されませんでした（数値・寸法は正常）。ネット接続をご確認のうえ再出力してください。');
   }catch(err){
     console.error(err);
     alert('PDF生成でエラーが発生しました: '+err.message);
   }finally{
-    btn.textContent='PDFを出力';btn.disabled=false;
+    btn.textContent='全ページPDFを出力'; btn.disabled=false;
   }
 };
 
